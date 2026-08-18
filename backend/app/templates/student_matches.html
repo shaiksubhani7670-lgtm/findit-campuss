@@ -79,7 +79,10 @@
     noMatches.classList.add('hidden');
     grid.classList.add('hidden');
 
-    const res = await apiFetch('/matches/');
+    const user = getCurrentUser();
+    const currentStudentId = user ? (user.id || user.student_id) : null;
+
+    const res = await apiFetch('/match');
     loader.classList.add('hidden');
 
     if (res && res.ok && res.data && res.data.success) {
@@ -92,23 +95,32 @@
           const card = document.createElement('div');
           card.className = 'premium-card p-6 flex flex-col justify-between hover:border-zinc-700/50 transition-all';
           
+          const isLostOwner = m.lost_item && currentStudentId && Number(m.lost_item.student_id) === Number(currentStudentId);
+          const displayTitle = isLostOwner ? (m.lost_item ? m.lost_item.item_name : 'Item Match') : (m.found_item ? m.found_item.item_name : 'Item Match');
+          const matchedItemTitle = isLostOwner ? (m.found_item ? m.found_item.item_name : 'Found Item') : (m.lost_item ? m.lost_item.item_name : 'Lost Item');
+          const roleLabel = isLostOwner ? 'My Lost Item' : 'My Reported Found Item';
+          const matchDescription = isLostOwner 
+            ? `Matched with found item: <strong>${matchedItemTitle}</strong>`
+            : `Matched with lost report: <strong>${matchedItemTitle}</strong>`;
+
           let scoreColor = '';
-          if (m.confidence_score >= 90) scoreColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-          else if (m.confidence_score >= 75) scoreColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+          const score = m.overall_score || m.confidence_score || 0;
+          if (score >= 90) scoreColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+          else if (score >= 75) scoreColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
           else scoreColor = 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
 
           card.innerHTML = `
             <div class="space-y-3">
               <div class="flex justify-between items-start">
-                <span class="text-[10px] text-zinc-500 font-bold font-mono">Match #${m.id}</span>
-                <span class="text-[9px] px-2.5 py-0.5 rounded-full border font-bold capitalize ${scoreColor}">${m.overall_score || m.confidence_score || 0}% overall</span>
+                <span class="text-[10px] text-indigo-400 font-bold uppercase font-mono">${roleLabel}</span>
+                <span class="text-[9px] px-2.5 py-0.5 rounded-full border font-bold capitalize ${scoreColor}">${score}% match</span>
               </div>
-              <h3 class="text-base font-bold text-white mb-1">${m.lost_item ? m.lost_item.item_name : 'Item Match'}</h3>
-              <p class="text-xs text-zinc-400 leading-relaxed">Matched with a found item logged by campus staff.</p>
+              <h3 class="text-base font-bold text-white mb-1">${displayTitle}</h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">${matchDescription}</p>
               
               <!-- Overall score bar -->
               <div class="h-1.5 rounded-full bg-zinc-950 border border-zinc-850/50 overflow-hidden mt-3">
-                <div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400" style="width: ${m.overall_score || 0}%"></div>
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400" style="width: ${score}%"></div>
               </div>
 
               <!-- Score breakdown -->
@@ -126,10 +138,16 @@
             </div>
 
             <div class="pt-4 mt-2 flex gap-2">
-              <button onclick="openClaimModal(${m.id})" class="btn-premium flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5">
-                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Claim
-              </button>
-              <a href="/messages/${m.id}" class="px-3 py-2.5 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center gap-1.5 transition-colors">
+              ${isLostOwner ? `
+                <button onclick="openClaimModal(${m.id})" class="btn-premium flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Claim Item
+                </button>
+              ` : `
+                <span class="flex-1 py-2.5 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-center">
+                  Matched & Pending Claim
+                </span>
+              `}
+              <a href="/messages/${m.id}" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center gap-1.5 transition-colors">
                 <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Chat
               </a>
             </div>

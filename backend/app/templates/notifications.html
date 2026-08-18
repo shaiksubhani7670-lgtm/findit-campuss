@@ -168,12 +168,19 @@
       return;
     }
 
+    const user = getCurrentUser();
+    const currentStudentId = user ? (user.id || user.student_id) : null;
+
     container.innerHTML = matches.map(m => {
       const lost = m.lost_item;
       const found = m.found_item;
       if (!lost || !found) return '';
 
       const isCompleted = lost.status === 'Completed' && found.status === 'Completed';
+      const isLostOwner = currentStudentId && Number(lost.student_id) === Number(currentStudentId);
+
+      const leftLabel = isLostOwner ? "My Lost Report" : "Matched Lost Report";
+      const rightLabel = isLostOwner ? "Found Item Match" : "My Reported Found Item";
 
       return `
         <div class="glass-card rounded-2xl p-6 space-y-5 bg-white border border-slate-100">
@@ -203,7 +210,7 @@
               </span>
               <h4 class="text-xs font-bold text-slate-800">Confidence Score Visualization</h4>
               <p class="text-[11px] text-slate-500 text-center md:text-left leading-relaxed">
-                Our models evaluated image features, description semantics, categories, and locations to compute this confidence match.
+                Our models evaluated title semantics, image features, categories, and locations to compute this confidence match.
               </p>
             </div>
             
@@ -224,19 +231,19 @@
               <div class="space-y-1.5 min-w-[160px] text-xs">
                 <div class="flex justify-between items-center text-[10px] font-semibold">
                   <span class="text-slate-500">Image Similarity</span>
-                  <span class="font-bold text-slate-800">${Math.round(m.image_score || m.overall_score * 0.98 || 89)}%</span>
+                  <span class="font-bold text-slate-800">${Math.round(m.image_score || 85)}%</span>
                 </div>
                 <div class="flex justify-between items-center text-[10px] font-semibold">
                   <span class="text-slate-500">Text Similarity</span>
-                  <span class="font-bold text-slate-800">${Math.round(m.description_score || m.overall_score * 1.03 || 94)}%</span>
+                  <span class="font-bold text-slate-800">${Math.round(m.description_score || 90)}%</span>
                 </div>
                 <div class="flex justify-between items-center text-[10px] font-semibold">
-                  <span class="text-slate-500">Category Match</span>
-                  <span class="font-bold text-slate-800">${Math.round(m.category_score || 100)}%</span>
+                  <span class="text-slate-500">Color Match</span>
+                  <span class="font-bold text-slate-800">${Math.round(m.color_score || 90)}%</span>
                 </div>
                 <div class="flex justify-between items-center text-[10px] font-semibold">
                   <span class="text-slate-500">Location Relevance</span>
-                  <span class="font-bold text-slate-800">${Math.round(m.location_score || m.overall_score * 0.90 || 82)}%</span>
+                  <span class="font-bold text-slate-800">${Math.round(m.location_score || 80)}%</span>
                 </div>
               </div>
             </div>
@@ -246,7 +253,7 @@
             
             <div class="space-y-3 bg-slate-50 border border-slate-200 p-4 rounded-xl">
               <div class="flex items-center justify-between">
-                <span class="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest font-mono">My Lost Report</span>
+                <span class="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest font-mono">${leftLabel}</span>
                 <span class="text-xs text-slate-500 font-semibold">${lost.category}</span>
               </div>
               <h4 class="font-bold text-slate-900 font-display text-sm">${lost.item_name}</h4>
@@ -260,7 +267,7 @@
 
             <div class="space-y-3 bg-violet-50/20 border border-violet-100 p-4 rounded-xl">
               <div class="flex items-center justify-between">
-                <span class="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest font-mono">Found Item Match</span>
+                <span class="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest font-mono">${rightLabel}</span>
                 <span class="text-xs text-slate-500 font-semibold">${found.category}</span>
               </div>
               <h4 class="font-bold text-slate-900 font-display text-sm">${found.item_name}</h4>
@@ -270,13 +277,17 @@
                 <p>Color: ${found.color}</p>
               </div>
 
-              ${!isCompleted ? `
+              ${!isCompleted ? (isLostOwner ? `
                 <button onclick="openVerifyModal('${m.id || m.match_id}')" class="btn-primary w-full text-xs py-2.5 mt-2 flex items-center justify-center gap-1.5">
                   <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Verify Ownership to Claim
                 </button>
               ` : `
+                <a href="/messages/${m.id || m.match_id}" class="btn-secondary w-full text-xs py-2.5 mt-2 flex items-center justify-center gap-1.5">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Chat with Lost Item Owner
+                </a>
+              `) : `
                 <div class="p-2.5 bg-emerald-50 text-emerald-700 text-xs rounded-xl font-bold text-center">
-                  Claim Processed Successfully
+                  Item Recovered / Claim Processed
                 </div>
               `}
             </div>
