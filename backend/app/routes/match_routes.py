@@ -45,6 +45,22 @@ def list_matches():
     """
     student_id = int(get_jwt_identity())
 
+    # Dynamically run matching on searching reports to guarantee matches exist
+    from app.services.matching_service import matching_service
+    searching_lost = LostItem.query.filter_by(student_id=student_id, status='Searching').all()
+    for l in searching_lost:
+        try:
+            matching_service.run_matching(l.report_id, 'lost')
+        except Exception:
+            pass
+
+    searching_found = FoundItem.query.filter_by(student_id=student_id, status='Searching').all()
+    for f in searching_found:
+        try:
+            matching_service.run_matching(f.report_id, 'found')
+        except Exception:
+            pass
+
     # Find matches where student is the owner of the lost item or the finder of the found item
     lost_reports = LostItem.query.filter_by(student_id=student_id).all()
     found_reports = FoundItem.query.filter_by(student_id=student_id).all()

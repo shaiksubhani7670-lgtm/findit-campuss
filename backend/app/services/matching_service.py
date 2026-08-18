@@ -34,7 +34,7 @@ class MatchingService:
         if not lost_item or lost_item.status == 'Cancelled':
             return []
 
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=60)
+        cutoff_date = datetime.utcnow() - timedelta(days=60)
         lost_cat = (lost_item.category or '').strip().lower()
 
         candidates = FoundItem.query.filter(
@@ -57,7 +57,7 @@ class MatchingService:
         if not found_item or found_item.status == 'Cancelled':
             return []
 
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=60)
+        cutoff_date = datetime.utcnow() - timedelta(days=60)
         found_cat = (found_item.category or '').strip().lower()
 
         candidates = LostItem.query.filter(
@@ -234,23 +234,22 @@ class MatchingService:
                     message=lost_notif_msg
                 ))
 
-            # 2. Notify Found Item Finder (User B) - REQUIREMENT: "match alerts should be suggested for both"
-            if found.student_id != lost.student_id:
-                found_notif_title = f"🎯 Item Match Alert for Found '{found.item_name}' ({overall}% match)"
-                found_notif_msg = (
-                    f"Your reported found item '{found.item_name}' matches a lost report for '{lost.item_name}'! "
-                    f"AI Confidence Score: {overall}%. Check your Match Alerts for details."
-                )
-                existing_f_notif = Notification.query.filter_by(
+            # 2. Notify Found Item Finder (User B)
+            found_notif_title = f"🎯 Item Match Alert for Found '{found.item_name}' ({overall}% match)"
+            found_notif_msg = (
+                f"Your reported found item '{found.item_name}' matches a lost report for '{lost.item_name}'! "
+                f"AI Confidence Score: {overall}%. Check your Match Alerts for details."
+            )
+            existing_f_notif = Notification.query.filter_by(
+                student_id=found.student_id,
+                title=found_notif_title
+            ).first()
+            if not existing_f_notif:
+                db.session.add(Notification(
                     student_id=found.student_id,
-                    title=found_notif_title
-                ).first()
-                if not existing_f_notif:
-                    db.session.add(Notification(
-                        student_id=found.student_id,
-                        title=found_notif_title,
-                        message=found_notif_msg
-                    ))
+                    title=found_notif_title,
+                    message=found_notif_msg
+                ))
 
         db.session.commit()
 

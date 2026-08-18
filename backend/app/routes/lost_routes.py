@@ -10,21 +10,12 @@ from app.models.question_answer import QuestionAnswer
 lost_routes_bp = Blueprint('lost_routes', __name__)
 
 def trigger_matching_async(report_id, report_type):
-    """Run AI matching asynchronously in a background thread."""
+    """Run AI matching for the submitted report."""
     from app.services.matching_service import matching_service
-    # We need application context to query database inside thread
-    from flask import current_app
-    app = current_app._get_current_object()
-    
-    def run_with_context():
-        with app.app_context():
-            try:
-                matching_service.run_matching(report_id, report_type)
-            except Exception as e:
-                print(f"Async matching error: {e}")
-
-    thread = threading.Thread(target=run_with_context, daemon=True)
-    thread.start()
+    try:
+        matching_service.run_matching(report_id, report_type)
+    except Exception as e:
+        print(f"Matching error for {report_type} report #{report_id}: {e}")
 
 
 @lost_routes_bp.route('/report', methods=['POST'])
