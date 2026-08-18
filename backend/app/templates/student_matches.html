@@ -1,0 +1,199 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}My Matches — FindIt Campus{% endblock %}
+
+{% block dashboard_content %}
+<div class="space-y-8 animate-fade-in-up">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold font-display">
+        AI Match <span class="gradient-text">Matches</span>
+      </h1>
+      <p class="text-zinc-400 text-sm mt-1">High confidence matching suggestions computed by the AI matching engine for your lost items</p>
+    </div>
+  </div>
+
+  <div id="loading" class="flex justify-center items-center py-20">
+    <div class="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+  </div>
+
+  <div id="no-matches-card" class="hidden premium-card p-12 text-center text-zinc-500 max-w-lg mx-auto">
+    <i data-lucide="sparkles" class="w-12 h-12 mx-auto mb-4 opacity-35 text-indigo-500 animate-pulse"></i>
+    <p class="text-lg font-medium text-zinc-200">No matches yet</p>
+    <p class="text-sm text-zinc-500 mt-1">Our AI engine continuously checks for matching found item records.</p>
+  </div>
+
+  <div id="matches-grid" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Loaded dynamically -->
+  </div>
+</div>
+
+<!-- Claim Ownership Modal -->
+<div id="claim-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  <div class="premium-card max-w-md w-full p-6 space-y-4 shadow-2xl border border-zinc-800">
+    <div id="claim-success" class="hidden text-center py-6 space-y-3">
+      <div class="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto text-emerald-400 border border-emerald-500/20">
+        <i data-lucide="check-circle" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-lg font-bold text-white">Claim Submitted!</h3>
+      <p class="text-xs text-zinc-400">
+        Your claim has been submitted to the security staff. They will verify your description and get back to you.
+      </p>
+    </div>
+
+    <div id="claim-form-container" class="space-y-4">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2 font-display">
+        <i data-lucide="shield-check" class="text-indigo-400 w-5 h-5"></i>
+        Claim Ownership
+      </h3>
+      <p class="text-xs text-zinc-400 leading-relaxed">
+        To prevent unauthorized claims, please describe identifying details of your item (e.g. stickers, wallpaper, scratches, serial numbers).
+      </p>
+      
+      <div>
+        <label class="block text-xs font-semibold text-zinc-400 mb-2">Describe Proof of Ownership *</label>
+        <textarea id="claim-description" required placeholder="Enter unique features of the item..." class="w-full px-4 py-3 rounded-xl bg-zinc-950/40 border border-zinc-850 outline-none text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-white min-h-[100px] resize-none"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-2">
+        <button onclick="closeClaimModal()" class="btn-premium-sec px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-200">Cancel</button>
+        <button id="claim-submit-btn" onclick="submitClaim()" class="btn-premium px-5 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2">
+          <span>Submit Claim</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block dashboard_scripts %}
+<script>
+  let activeMatchId = null;
+
+  async function loadMatches() {
+    const loader = document.getElementById('loading');
+    const noMatches = document.getElementById('no-matches-card');
+    const grid = document.getElementById('matches-grid');
+
+    loader.classList.remove('hidden');
+    noMatches.classList.add('hidden');
+    grid.classList.add('hidden');
+
+    const res = await apiFetch('/matches/');
+    loader.classList.add('hidden');
+
+    if (res && res.ok && res.data && res.data.success) {
+      const matches = res.data.data.matches || [];
+      if (matches.length === 0) {
+        noMatches.classList.remove('hidden');
+      } else {
+        grid.innerHTML = '';
+        matches.forEach(m => {
+          const card = document.createElement('div');
+          card.className = 'premium-card p-6 flex flex-col justify-between hover:border-zinc-700/50 transition-all';
+          
+          let scoreColor = '';
+          if (m.confidence_score >= 90) scoreColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+          else if (m.confidence_score >= 75) scoreColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+          else scoreColor = 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+
+          card.innerHTML = `
+            <div class="space-y-3">
+              <div class="flex justify-between items-start">
+                <span class="text-[10px] text-zinc-500 font-bold font-mono">Match #${m.id}</span>
+                <span class="text-[9px] px-2.5 py-0.5 rounded-full border font-bold capitalize ${scoreColor}">${m.overall_score || m.confidence_score || 0}% overall</span>
+              </div>
+              <h3 class="text-base font-bold text-white mb-1">${m.lost_item ? m.lost_item.item_name : 'Item Match'}</h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">Matched with a found item logged by campus staff.</p>
+              
+              <!-- Overall score bar -->
+              <div class="h-1.5 rounded-full bg-zinc-950 border border-zinc-850/50 overflow-hidden mt-3">
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400" style="width: ${m.overall_score || 0}%"></div>
+              </div>
+
+              <!-- Score breakdown -->
+              <div class="mt-3 space-y-1.5 bg-zinc-950/40 rounded-xl p-3 border border-zinc-800">
+                <p class="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">AI Score Breakdown</p>
+                ${[['🖼️ Image', m.image_score||0],['🎨 Color',m.color_score||0],['📝 Description',m.description_score||0],['📍 Location',m.location_score||0],['🏷️ Brand',m.brand_score||0]].map(([label,val]) => `
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-zinc-400 w-24 shrink-0">${label}</span>
+                    <div class="flex-1 h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full" style="width:${val}%;background:${val>=70?'#10b981':val>=40?'#f59e0b':'#ef4444'}"></div>
+                    </div>
+                    <span class="text-[9px] font-bold text-zinc-400 w-8 text-right">${Math.round(val)}%</span>
+                  </div>`).join('')}
+              </div>
+            </div>
+
+            <div class="pt-4 mt-2 flex gap-2">
+              <button onclick="openClaimModal(${m.id})" class="btn-premium flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Claim
+              </button>
+              <a href="/messages/${m.id}" class="px-3 py-2.5 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center gap-1.5 transition-colors">
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Chat
+              </a>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+        grid.classList.remove('hidden');
+        lucide.createIcons();
+      }
+    } else {
+      noMatches.querySelector('p').innerText = 'Failed to load matches';
+      noMatches.classList.remove('hidden');
+    }
+  }
+
+  function openClaimModal(matchId) {
+    activeMatchId = matchId;
+    document.getElementById('claim-modal').classList.remove('hidden');
+    document.getElementById('claim-form-container').classList.remove('hidden');
+    document.getElementById('claim-success').classList.add('hidden');
+    document.getElementById('claim-description').value = '';
+  }
+
+  function closeClaimModal() {
+    document.getElementById('claim-modal').classList.add('hidden');
+    activeMatchId = null;
+  }
+
+  async function submitClaim() {
+    if (!activeMatchId) return;
+    const desc = document.getElementById('claim-description').value;
+    if (!desc.trim()) {
+      alert('Please enter proof description.');
+      return;
+    }
+
+    const btn = document.getElementById('claim-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>`;
+
+    const res = await apiFetch('/claims/', {
+      method: 'POST',
+      body: JSON.stringify({
+        match_id: activeMatchId,
+        description: desc,
+        proof_images: []
+      })
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = `<span>Submit Claim</span>`;
+
+    if (res && res.ok) {
+      document.getElementById('claim-form-container').classList.add('hidden');
+      document.getElementById('claim-success').classList.remove('hidden');
+      setTimeout(() => {
+        closeClaimModal();
+        loadMatches();
+      }, 2000);
+    } else {
+      alert('Failed to submit claim. Please try again.');
+    }
+  }
+
+  loadMatches();
+</script>
+{% endblock %}

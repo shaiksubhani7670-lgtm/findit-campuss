@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In — FindIt Campus{% endblock %}
+
+{% block extra_head %}
+<style>
+  #chatbot-bubble, #chatbot-panel {
+    display: none !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col md:flex-row bg-slate-50">
+  
+  <!-- Left Column: Premium Purple Brand Panel -->
+  <div class="w-full md:w-[42%] bg-gradient-to-br from-violet-750 via-indigo-850 to-purple-950 text-white p-8 md:p-12 flex flex-col justify-between relative overflow-hidden select-none shrink-0 min-h-[300px] md:min-h-screen">
+    <!-- SVG Grid Background -->
+    <div class="absolute inset-0 opacity-10 pointer-events-none">
+      <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#fff" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+      </svg>
+    </div>
+    
+    <!-- Pulse Glowing Orb -->
+    <div class="absolute w-[280px] h-[280px] rounded-full bg-fuchsia-500/20 blur-3xl top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse pointer-events-none" style="animation-duration: 5s;"></div>
+
+    <!-- Header Logo -->
+    <div class="flex items-center gap-3 relative z-10">
+      <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+        <i data-lucide="sparkles" class="w-5 h-5 text-violet-200"></i>
+      </div>
+      <div>
+        <span class="font-extrabold text-lg tracking-wider block uppercase">FindIt Campus</span>
+        <span class="text-[9px] text-violet-200 font-bold block uppercase tracking-widest mt-0.5">AI Lost &amp; Found</span>
+      </div>
+    </div>
+
+    <!-- Tagline & Description -->
+    <div class="my-auto py-12 md:py-0 relative z-10 space-y-6">
+      <h2 class="text-3xl md:text-4xl font-black font-display leading-tight tracking-tight">
+        Find what you lost. <br>
+        Return what you found.
+      </h2>
+      <p class="text-xs md:text-sm text-violet-200/80 max-w-sm leading-relaxed">
+        The official AI-powered Lost & Found assistant for students, faculty, and campus staff. Report, match, and claim belongings in real time.
+      </p>
+    </div>
+
+    <!-- Footer Credit -->
+    <div class="relative z-10 text-[10px] text-violet-300/60 font-semibold tracking-wider uppercase mt-auto">
+      Geethanjali Institute of Science and Tech. (GIST)
+    </div>
+  </div>
+
+  <!-- Right Column: Warm White Login Form Panel -->
+  <div class="flex-1 flex items-center justify-center p-6 md:p-12 bg-slate-50 relative">
+    <div class="w-full max-w-[380px] space-y-6">
+      
+      <!-- Title Header -->
+      <div class="space-y-1">
+        <h2 class="text-2xl font-black text-slate-900 tracking-tight">Student Login</h2>
+        <p class="text-xs text-slate-500 font-medium">Access your campus account and activity logs</p>
+      </div>
+
+      <!-- Alert Box -->
+      <div id="alert-box" class="hidden p-3.5 rounded-lg text-xs font-semibold flex items-center gap-2 border">
+        <i id="alert-icon" data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+        <span id="alert-msg"></span>
+      </div>
+
+      <!-- Login Form Card -->
+      <form id="login-form" onsubmit="handleLoginSubmit(event)" class="card-flat p-6 space-y-4">
+        <div>
+          <label class="block text-[10px] font-extrabold text-slate-700 uppercase tracking-widest mb-1.5">Roll Number</label>
+          <input type="text" id="email" required placeholder="e.g. 23A91A0501" class="w-full input-simple text-sm">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-extrabold text-slate-700 uppercase tracking-widest mb-1.5">Password</label>
+          <input type="password" id="password" required placeholder="••••••••" class="w-full input-simple text-sm">
+        </div>
+
+        <button type="submit" id="submit-btn" class="w-full btn-primary py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-violet-500/10">
+          <span>Sign In to Dashboard</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+
+        <p class="text-[10px] text-slate-400 text-center pt-2 leading-relaxed">
+          Default test login: Roll No <code class="text-violet-700 bg-violet-50 px-1 py-0.5 rounded font-mono font-bold">23A91A0501</code> <br class="sm:hidden"> Password <code class="text-violet-700 bg-violet-50 px-1 py-0.5 rounded font-mono font-bold">password123</code>
+        </p>
+      </form>
+
+      <div class="text-center text-xs text-slate-500">
+        <a href="/" class="hover:text-violet-700 hover:underline flex items-center justify-center gap-1 font-semibold transition-colors">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Return to Homepage
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const user = getCurrentUser();
+  if (user && getToken()) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectUrl = urlParams.get('redirect') || '/dashboard';
+    window.location.href = redirectUrl;
+  }
+
+  async function handleLoginSubmit(event) {
+    event.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    const alertBox = document.getElementById('alert-box');
+    const alertMsg = document.getElementById('alert-msg');
+    
+    alertBox.className = 'hidden';
+    btn.disabled = true;
+    btn.innerHTML = `<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> <span>Authenticating...</span>`;
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    const res = await apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = `<span>Sign In to Dashboard</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+    lucide.createIcons();
+
+    if (res && res.ok && res.data && res.data.success) {
+      setToken(res.data.data.access_token);
+      localStorage.setItem('user', JSON.stringify(res.data.data.user));
+      
+      alertBox.className = 'p-3.5 rounded-lg text-xs font-semibold flex items-center gap-2 border bg-emerald-50 border-emerald-200 text-emerald-700';
+      alertMsg.innerText = 'Login Successful! Redirecting...';
+      
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 600);
+    } else {
+      const msg = res && res.data ? res.data.message : 'Invalid Roll Number or Password';
+      alertBox.className = 'p-3.5 rounded-lg text-xs font-semibold flex items-center gap-2 border bg-red-50 border-red-200 text-red-700';
+      alertMsg.innerText = msg;
+    }
+  }
+</script>
+{% endblock %}

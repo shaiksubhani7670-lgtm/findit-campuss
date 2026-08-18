@@ -1,0 +1,11 @@
+backend/venv/
+backend/__pycache__/
+ml/
+docs/
+*.pyc
+*.pyo
+.git/
+.env.example
+Dockerfile.backend
+Dockerfile.frontend
+docker-compose.yml
