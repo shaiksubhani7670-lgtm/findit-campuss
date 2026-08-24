@@ -43,9 +43,21 @@ def create_app(config_class=None):
     ma.init_app(app)
     limiter.init_app(app)
 
-    # Configure CORS
-    CORS(app, origins=app.config.get('CORS_ORIGINS', ['http://localhost:3000']),
-         supports_credentials=True)
+    # Configure CORS — allow Vercel domain + localhost
+    cors_origins = app.config.get('CORS_ORIGINS', ['http://localhost:3000'])
+    if isinstance(cors_origins, str):
+        cors_origins = [o.strip() for o in cors_origins.split(',') if o.strip()]
+    # Always include the Vercel deployment domain and all subdomains
+    extra_origins = [
+        'https://findit-virid.vercel.app',
+        'https://*.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:5000',
+    ]
+    for o in extra_origins:
+        if o not in cors_origins:
+            cors_origins.append(o)
+    CORS(app, origins=cors_origins, supports_credentials=True)
 
     # Register blueprints
     _register_blueprints(app)

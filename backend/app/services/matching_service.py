@@ -45,10 +45,12 @@ class MatchingService:
         matches = []
         for found_item in candidates:
             found_cat = (found_item.category or '').strip().lower()
-            if lost_cat == found_cat or lost_cat in found_cat or found_cat in lost_cat or lost_cat == 'other' or found_cat == 'other':
-                m = self._compute_and_save_match(lost_item, found_item)
-                if m:
-                    matches.append(m)
+            # Allow all items to be matched — category difference just lowers score
+            # Only skip if both are completely different and neither is 'other'
+            # (scoring algorithm handles category relevance)
+            m = self._compute_and_save_match(lost_item, found_item)
+            if m:
+                matches.append(m)
 
         return matches
 
@@ -67,17 +69,23 @@ class MatchingService:
 
         matches = []
         for lost_item in candidates:
-            lost_cat = (lost_item.category or '').strip().lower()
-            if lost_cat == found_cat or lost_cat in found_cat or found_cat in lost_cat or lost_cat == 'other' or found_cat == 'other':
-                m = self._compute_and_save_match(lost_item, found_item)
-                if m:
-                    matches.append(m)
+            # Allow all items to be matched — scoring handles relevance
+            m = self._compute_and_save_match(lost_item, found_item)
+            if m:
+                matches.append(m)
 
         return matches
 
     def _compute_and_save_match(self, lost, found):
+        # 0. Category match boost (not in weighted total but used for filtering)
+        lost_cat = (lost.category or '').strip().lower()
+        found_cat = (found.category or '').strip().lower()
+        cat_match = (lost_cat == found_cat or lost_cat in found_cat or found_cat in lost_cat
+                     or not lost_cat or not found_cat or lost_cat == 'other' or found_cat == 'other')
+
         # 1. Item Name / Title Similarity (25%)
         title_score = self._str_sim(lost.item_name, found.item_name)
+
 
         # 2. Image similarity (20%)
         has_images = lost.image_path is not None and found.image_path is not None
@@ -167,14 +175,21 @@ class MatchingService:
                    color_score * 15.0 + 
                    location_score * 10.0)
 
+        # Category match bonus/penalty
+        if cat_match:
+            overall = min(overall + 5.0, 100.0)  # same category boosts confidence
+        else:
+            overall = max(overall - 10.0, 0.0)   # different category lowers confidence
+
         if title_score >= 0.8 and color_score >= 0.7 and loc_score >= 0.7:
             overall = max(overall, 85.0)
 
         overall = round(overall, 1)
 
-        # Ignore very weak matches below 40%
-        if overall < 40.0:
+        # Ignore very weak matches below 30%
+        if overall < 30.0:
             return None
+
 
         # Check if match already exists
         existing_match = Match.query.filter_by(

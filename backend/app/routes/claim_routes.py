@@ -73,11 +73,15 @@ def calculate_verification_score(claimant_answers, found_item, found_qas):
     return round(min(score, 100.0), 1)
 
 
+
 @claim_routes_bp.route('/create', methods=['POST'])
+@claim_routes_bp.route('', methods=['POST'])
+@claim_routes_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_claim():
     """
     Create a claim for a match.
+    Accepts POST to /api/claims/, /api/claims, or /api/claims/create
     """
     student_id = int(get_jwt_identity())
     data = request.get_json()
@@ -119,6 +123,8 @@ def create_claim():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Failed to create claim: {str(e)}'}), 500
+
+
 
 
 @claim_routes_bp.route('/verify', methods=['POST'])

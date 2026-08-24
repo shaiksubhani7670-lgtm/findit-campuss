@@ -35,13 +35,18 @@ def my_reports():
 def notifications():
     return render_template('notifications.html')
 
-@pages_bp.route('/profile')
-def profile():
-    return render_template('profile.html')
+# Match Alerts / Matches page (same as notifications — shows AI matches)
+@pages_bp.route('/matches')
+def matches():
+    return render_template('notifications.html')
 
 @pages_bp.route('/browse-lost')
 def browse_lost():
     return render_template('browse_lost.html')
+
+@pages_bp.route('/profile')
+def profile():
+    return render_template('profile.html')
 
 # ─── New Feature Pages ──────────────────────────────────────────────
 @pages_bp.route('/leaderboard')
@@ -79,5 +84,3 @@ def poster(report_id):
 @pages_bp.route('/verify-email')
 def verify_email_page():
     return render_template('verify_email.html')
-
-

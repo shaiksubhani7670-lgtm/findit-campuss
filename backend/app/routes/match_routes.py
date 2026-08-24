@@ -42,11 +42,13 @@ def run_matching_endpoint():
 def list_matches():
     """
     List all matches related to the logged-in student's lost or found items.
+    Automatically triggers AI matching for any unmatched 'Searching' items.
     """
     student_id = int(get_jwt_identity())
 
-    # Dynamically run matching on searching reports to guarantee matches exist
     from app.services.matching_service import matching_service
+
+    # Run matching on student's own 'Searching' reports
     searching_lost = LostItem.query.filter_by(student_id=student_id, status='Searching').all()
     for l in searching_lost:
         try:
@@ -60,6 +62,18 @@ def list_matches():
             matching_service.run_matching(f.report_id, 'found')
         except Exception:
             pass
+
+    # Also run global sweep of all unmatched found items against all lost items
+    # to ensure cross-user matches are computed
+    try:
+        all_found_searching = FoundItem.query.filter_by(status='Searching').limit(50).all()
+        for f in all_found_searching:
+            try:
+                matching_service.run_matching(f.report_id, 'found')
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     # Find matches where student is the owner of the lost item or the finder of the found item
     lost_reports = LostItem.query.filter_by(student_id=student_id).all()
@@ -101,6 +115,7 @@ def list_matches():
         'message': 'Matches retrieved successfully',
         'data': {'matches': matches_data}
     }), 200
+
 
 
 @match_routes_bp.route('/<int:match_id>', methods=['GET'])
