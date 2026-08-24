@@ -116,8 +116,8 @@ class MatchingService:
 
         # 5. Color (15%)
         color_score = 0.0
-        lost_col = lost.color.strip().lower()
-        found_col = found.color.strip().lower()
+        lost_col = (lost.color or '').strip().lower()
+        found_col = (found.color or '').strip().lower()
         if lost_col == found_col:
             color_score = 1.0
         elif lost_col in found_col or found_col in lost_col:
@@ -139,18 +139,39 @@ class MatchingService:
                 color_score = 0.2
 
         # 6. Location + Date + Time (10%)
-        loc_score = 1.0 if lost.location.lower() == found.location.lower() or lost.location.lower() in found.location.lower() or found.location.lower() in lost.location.lower() else 0.4
-        days_diff = abs((found.date - lost.date).days)
+        lost_loc = (lost.location or '').lower()
+        found_loc = (found.location or '').lower()
+        loc_score = 1.0 if lost_loc == found_loc or lost_loc in found_loc or found_loc in lost_loc else 0.4
+
+        # Handle date as string or date object
+        try:
+            from datetime import date as date_type
+            ld = lost.date if isinstance(lost.date, date_type) else date_type.fromisoformat(str(lost.date))
+            fd = found.date if isinstance(found.date, date_type) else date_type.fromisoformat(str(found.date))
+            days_diff = abs((fd - ld).days)
+        except Exception:
+            days_diff = 1
         date_score = 1.0 if days_diff == 0 else (0.9 if days_diff <= 1 else (0.7 if days_diff <= 3 else (0.5 if days_diff <= 7 else 0.2)))
 
         time_score = 0.5
-        if lost.time and found.time:
-            t1 = lost.time.hour * 60 + lost.time.minute
-            t2 = found.time.hour * 60 + found.time.minute
-            min_diff = abs(t1 - t2)
-            if min_diff <= 60: time_score = 1.0
-            elif min_diff <= 180: time_score = 0.7
-            else: time_score = 0.4
+        try:
+            from datetime import time as time_type
+            def _parse_time(t):
+                if t is None: return None
+                if isinstance(t, time_type): return t
+                parts = str(t).split(':')
+                return time_type(int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
+            lt = _parse_time(lost.time)
+            ft = _parse_time(found.time)
+            if lt and ft:
+                t1 = lt.hour * 60 + lt.minute
+                t2 = ft.hour * 60 + ft.minute
+                min_diff = abs(t1 - t2)
+                if min_diff <= 60: time_score = 1.0
+                elif min_diff <= 180: time_score = 0.7
+                else: time_score = 0.4
+        except Exception:
+            time_score = 0.5
             
         location_score = (loc_score + date_score + time_score) / 3.0
 
