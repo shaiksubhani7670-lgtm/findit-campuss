@@ -34,12 +34,12 @@ class MatchingService:
         if not lost_item or lost_item.status == 'Cancelled':
             return []
 
-        cutoff_date = datetime.utcnow() - timedelta(days=60)
+        # Extend cutoff to 365 days to catch items from months ago
+        cutoff_date = datetime.utcnow() - timedelta(days=365)
         lost_cat = (lost_item.category or '').strip().lower()
 
         candidates = FoundItem.query.filter(
-            FoundItem.status != 'Cancelled',
-            FoundItem.created_at >= cutoff_date
+            FoundItem.status != 'Cancelled'
         ).all()
 
         matches = []
@@ -59,7 +59,8 @@ class MatchingService:
         if not found_item or found_item.status == 'Cancelled':
             return []
 
-        cutoff_date = datetime.utcnow() - timedelta(days=60)
+        # Extend cutoff to 365 days to catch items from months ago
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=365)
         found_cat = (found_item.category or '').strip().lower()
 
         candidates = LostItem.query.filter(

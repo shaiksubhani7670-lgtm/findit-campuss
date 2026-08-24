@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
@@ -23,7 +23,7 @@ def _auto_seed_found_items():
         if lost_count == 0 or found_count > 0:
             return  # Nothing to seed
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()  # naive UTC — consistent with SQLite
         all_lost = LostItem.query.filter(LostItem.status != 'Cancelled').limit(20).all()
 
         # Get students that can act as finders (not the owners of lost items)
