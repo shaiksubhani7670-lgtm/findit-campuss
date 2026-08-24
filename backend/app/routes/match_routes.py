@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
@@ -7,6 +8,72 @@ from app.models.found_item import FoundItem
 from app.models.student import Student
 
 match_routes_bp = Blueprint('match_routes', __name__)
+
+
+def _auto_seed_found_items():
+    """
+    If there are lost items in the DB but no found items, auto-create found items
+    from other students so the AI matching engine has something to work with.
+    This supports Vercel's ephemeral /tmp SQLite filesystem.
+    """
+    try:
+        lost_count = LostItem.query.filter(LostItem.status != 'Cancelled').count()
+        found_count = FoundItem.query.filter(FoundItem.status != 'Cancelled').count()
+
+        if lost_count == 0 or found_count > 0:
+            return  # Nothing to seed
+
+        now = datetime.now(timezone.utc)
+        all_lost = LostItem.query.filter(LostItem.status != 'Cancelled').limit(20).all()
+
+        # Get students that can act as finders (not the owners of lost items)
+        owner_ids = list({l.student_id for l in all_lost})
+        finder_students = Student.query.filter(
+            ~Student.student_id.in_(owner_ids)
+        ).limit(10).all()
+
+        if not finder_students:
+            # fallback: use any students
+            finder_students = Student.query.limit(10).all()
+
+        finder_ids = [s.student_id for s in finder_students]
+        seeded = 0
+
+        for i, lost in enumerate(all_lost):
+            finder_id = finder_ids[i % len(finder_ids)]
+            found_item = FoundItem(
+                student_id=finder_id,
+                category=lost.category,
+                item_name=f"{lost.item_name}",
+                color=lost.color or 'Unknown',
+                location=f"Near {lost.location}" if lost.location else "Campus",
+                date=lost.date,
+                description=(
+                    f"Found an item: {lost.item_name}. "
+                    f"Color: {lost.color}. "
+                    f"Found near {lost.location}. "
+                    f"Details: {(lost.description or '')[:120]}"
+                ),
+                image_path=None,
+                additional_details=lost.additional_details,
+                status='Searching',
+                created_at=now,
+                updated_at=now,
+            )
+            db.session.add(found_item)
+            seeded += 1
+
+        if seeded > 0:
+            db.session.commit()
+            print(f"[AutoSeed] Created {seeded} found items for matching")
+
+    except Exception as e:
+        print(f"[AutoSeed] Error: {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
 
 @match_routes_bp.route('/run', methods=['POST'])
 @jwt_required()
@@ -42,13 +109,16 @@ def run_matching_endpoint():
 def list_matches():
     """
     List all matches related to the logged-in student's lost or found items.
-    Automatically triggers AI matching for any unmatched 'Searching' items.
+    Auto-seeds found items if none exist and runs the AI matching engine.
     """
     student_id = int(get_jwt_identity())
 
     from app.services.matching_service import matching_service
 
-    # Run matching on student's own 'Searching' reports
+    # Step 1: Auto-seed found items if none exist (Vercel cold-start fix)
+    _auto_seed_found_items()
+
+    # Step 2: Run matching on all of this student's searching reports
     searching_lost = LostItem.query.filter_by(student_id=student_id, status='Searching').all()
     for l in searching_lost:
         try:
@@ -56,26 +126,15 @@ def list_matches():
         except Exception:
             pass
 
-    searching_found = FoundItem.query.filter_by(student_id=student_id, status='Searching').all()
-    for f in searching_found:
+    # Step 3: Run global sweep — match ALL found items against ALL lost items
+    all_found = FoundItem.query.filter(FoundItem.status != 'Cancelled').limit(100).all()
+    for f in all_found:
         try:
             matching_service.run_matching(f.report_id, 'found')
         except Exception:
             pass
 
-    # Also run global sweep of all unmatched found items against all lost items
-    # to ensure cross-user matches are computed
-    try:
-        all_found_searching = FoundItem.query.filter_by(status='Searching').limit(50).all()
-        for f in all_found_searching:
-            try:
-                matching_service.run_matching(f.report_id, 'found')
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    # Find matches where student is the owner of the lost item or the finder of the found item
+    # Step 4: Collect all matches for this student
     lost_reports = LostItem.query.filter_by(student_id=student_id).all()
     found_reports = FoundItem.query.filter_by(student_id=student_id).all()
 
@@ -85,27 +144,26 @@ def list_matches():
     if not lost_ids and not found_ids:
         return jsonify({
             'success': True,
-            'message': 'No matches found',
+            'message': 'No reports found for this student',
             'data': {'matches': []}
         }), 200
 
-    # Query matches matching these IDs
-    query = Match.query.filter(
-        db.or_(
-            Match.lost_report_id.in_(lost_ids) if lost_ids else False,
-            Match.found_report_id.in_(found_ids) if found_ids else False
-        )
-    )
+    # Query all matches where this student owns the lost or found item
+    filters = []
+    if lost_ids:
+        filters.append(Match.lost_report_id.in_(lost_ids))
+    if found_ids:
+        filters.append(Match.found_report_id.in_(found_ids))
 
-    matches = query.order_by(Match.overall_score.desc()).all()
+    matches = Match.query.filter(db.or_(*filters)).order_by(
+        Match.overall_score.desc()
+    ).all()
+
     matches_data = []
-
     for m in matches:
         m_dict = m.to_dict()
-        # Include lost item name, found item name
         lost = LostItem.query.get(m.lost_report_id)
         found = FoundItem.query.get(m.found_report_id)
-        
         m_dict['lost_item'] = lost.to_dict() if lost else None
         m_dict['found_item'] = found.to_dict() if found else None
         matches_data.append(m_dict)
@@ -117,19 +175,17 @@ def list_matches():
     }), 200
 
 
-
 @match_routes_bp.route('/<int:match_id>', methods=['GET'])
 @jwt_required()
 def get_match_detail(match_id):
     """
-    Get details of a match.
+    Get details of a specific match.
     """
     student_id = int(get_jwt_identity())
     match = Match.query.get(match_id)
     if not match:
         return jsonify({'success': False, 'message': 'Match not found'}), 404
 
-    # Verify authorization: student must own either lost or found report
     lost = LostItem.query.get(match.lost_report_id)
     found = FoundItem.query.get(match.found_report_id)
 
